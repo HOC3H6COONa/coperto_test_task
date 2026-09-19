@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Стоп-лист смены
 
-## Getting Started
+Панель менеджера зала: меню смены с фильтрами по цеху и статусу, постановка позиций в
+стоп-лист и снятие с него, с оптимистичным обновлением UI. Тестовое задание, реализованное
+по ТЗ Coperto.
 
-First, run the development server:
+## Запуск локально
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Приложение поднимется на [http://localhost:3000](http://localhost:3000). Отдельный бэкенд не
+нужен - API находится в Next.js и хранит данные в памяти процесса.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Полезные скрипты:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint         # ESLint
+npm run typecheck    # tsc --noEmit
+npm run format       # Prettier --write
+npm run test         # Vitest
+npm run build        # production-сборка
+```
 
-## Learn More
+Перед каждым коммитом эти проверки (кроме сборки) частично дублирует Husky-хук - `npx lint-staged` (ESLint + Prettier по застейдженным файлам) и `npm run typecheck`, см. `.husky/pre-commit`.
 
-To learn more about Next.js, take a look at the following resources:
+## Ссылки
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Превью (Vercel):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Слои и граница сервер/клиент
 
-## Deploy on Vercel
+`app/api/**` - route handler'ы (мок-бэкенд, данные в `server/menu-store.ts`); `app/page.tsx` - является
+единственным серверным компонентом фичи, читает и нормализует `searchParams`, редиректит на чистый
+URL при невалидных значениях. Всё остальное - это клиентские компоненты: `features/stop-list/model/*`
+(транспорт, кэш, мутации, zustand-стор, URL-фильтры) и `features/stop-list/ui/*` (презентация,
+собирается в `StopListScreen`), плюс независимый от домена `shared/ui/*`. Клиентский слой нужен
+именно потому, что экрану требуются состояния загрузки/ошибок, оптимистичные мутации и
+интерактивные формы, то, что серверный компонент дать не может.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Данные, состояние и типизация
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Весь `fetch` в `model/queries.ts`, UI не знает про URL эндпоинтов и формат ответа, кэш-ключ один
+(`menuKeys.list()`), фильтрация на клиенте, так как список маленький и это допустимо для тестового задания. Оптимистика - стандартная схема TanStack
+Query: `onMutate` снимает снапшот и сразу пишет новый статус, `onError` откатывает к снапшоту, `onSettled` инвалидирует кэш. Одна zod-схема (`stopItemSchema`) валидирует и форму, и
+тело запроса в route handler, так что правила не могут разойтись. Типы везде строгие, `any` и
+`@ts-ignore` не используются.
+
+## Допущения
+
+- Данные из `server/menu-store.ts` живут в памяти процесса Node.js. На Vercel (serverless)
+  это означает, что состояние не разделяется между функциями и обнуляется при холодном
+  старте/новом деплое - для тестового задания это ожидаемо и явно вынесено в ТЗ, реальная
+  персистентность потребовала бы внешнего хранилища.
+- GET `/api/menu-items` тоже отвечает с задержкой и вероятностью ошибки (~12%, `retry: false`
+  в `queryOptions`), хотя в ТЗ это явно требовалось только для мутаций - иначе состояние
+  ошибки списка было бы невозможно увидеть в интерфейсе.
+- Срок стопа хранится и проверяется в UTC-миллисекундах (как в примере `validateUntil` из ТЗ);
+  шаг в 15 минут корректен для любого реального часового пояса, так как все существующие
+  UTC-офсеты кратны 15 минутам.
+
+## Тесты
+
+Один юнит-тест: `features/stop-list/model/use-stop-item.test.tsx` (Vitest + Testing Library) -
+на самую рискованную часть логики: оптимистичное обновление и откат. Мокает `fetch` управляемым
+промисом, чтобы отдельно проверить, что (1) кэш меняется сразу после `mutate`, ещё до ответа
+сервера, и (2) при ответе 500 кэш возвращается к снапшоту, а в `ui-store` попадает тост с
+`variant: 'error'`. Полное покрытие тестами не входило в объём задания.
+
+## Что доделал бы при наличии времени
+
+- `aria-live` регион для тостов и более полный обход с клавиатуры формы (фокус-трап внутри
+  модалки).
+- Обработку гонки, если пользователь быстро открывает панели для двух разных позиций подряд —
+  сейчас `pending`-индикатор строки берётся из последнего вызова каждой мутации, что достаточно
+  для одного оператора, но не идеально при параллельных действиях.
