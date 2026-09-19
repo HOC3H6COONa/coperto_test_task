@@ -61,7 +61,7 @@ export function StopListScreen() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">
       <header className="flex flex-col gap-1">
         <h1 className="text-text text-2xl font-semibold">Стоп-лист смены</h1>
         <p className="text-muted text-sm">

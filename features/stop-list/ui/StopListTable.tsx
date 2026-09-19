@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import type { ReactNode } from 'react';
 
 import type { MenuItem } from '@/types/menu';
 import { Badge } from '@/shared/ui/Badge';
@@ -22,10 +23,22 @@ interface StopListTableProps {
   onResume: (item: MenuItem) => void;
 }
 
+function MutedCell({ muted, children }: { muted: boolean; children: ReactNode }) {
+  return (
+    <motion.span
+      animate={{ opacity: muted ? 0.6 : 1 }}
+      transition={{ duration: 0.25 }}
+      className="inline-block"
+    >
+      {children}
+    </motion.span>
+  );
+}
+
 export function StopListTable({ items, pending, onOpenPanel, onResume }: StopListTableProps) {
   return (
     <div className="border-border bg-surface overflow-x-auto rounded-xl border">
-      <table className="w-full min-w-[1040px] table-fixed border-collapse text-left text-sm">
+      <table className="w-full min-w-[1160px] table-fixed border-collapse text-left text-sm">
         <thead>
           <tr className="border-border text-muted border-b text-xs tracking-wide uppercase">
             <th className="px-4 py-3 font-medium">Позиция</th>
@@ -42,14 +55,9 @@ export function StopListTable({ items, pending, onOpenPanel, onResume }: StopLis
             const canResume = item.stock > 0;
 
             return (
-              <motion.tr
-                key={item.id}
-                animate={{ opacity: isStopped ? 0.7 : 1 }}
-                transition={{ duration: 0.25 }}
-                className="border-border border-b last:border-0"
-              >
+              <tr key={item.id} className="border-border border-b last:border-0">
                 <td className="text-text truncate px-4 py-3 font-medium" title={item.title}>
-                  {item.title}
+                  <MutedCell muted={isStopped}>{item.title}</MutedCell>
                   {isRowPending && (
                     <span className="ml-2 inline-flex align-middle">
                       <Spinner className="text-muted h-3.5 w-3.5" />
@@ -57,8 +65,12 @@ export function StopListTable({ items, pending, onOpenPanel, onResume }: StopLis
                     </span>
                   )}
                 </td>
-                <td className="text-text px-4 py-3">{SHOP_LABELS[item.shop]}</td>
-                <td className="text-text px-4 py-3">{item.stock}</td>
+                <td className="text-text px-4 py-3">
+                  <MutedCell muted={isStopped}>{SHOP_LABELS[item.shop]}</MutedCell>
+                </td>
+                <td className="text-text px-4 py-3">
+                  <MutedCell muted={isStopped}>{item.stock}</MutedCell>
+                </td>
                 <td className="px-4 py-3">
                   {item.status.kind === 'available' ? (
                     <Badge variant="success">В продаже</Badge>
@@ -96,7 +108,7 @@ export function StopListTable({ items, pending, onOpenPanel, onResume }: StopLis
                           Вернуть в продажу
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           className="w-44 shrink-0"
                           onClick={() => onOpenPanel(item)}
                           disabled={isRowPending}
@@ -107,7 +119,7 @@ export function StopListTable({ items, pending, onOpenPanel, onResume }: StopLis
                     )}
                   </div>
                 </td>
-              </motion.tr>
+              </tr>
             );
           })}
         </tbody>
